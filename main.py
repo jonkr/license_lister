@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-import gevent
 import gevent.monkey as monkey
 monkey.patch_all()
 
@@ -11,14 +10,15 @@ import subprocess
 from gevent.pool import Pool
 
 
-
 REQUIREMENT_FILE_NAME_PATTERN = r'requirements.*\.txt'
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument('base_path',
-                        help='Basepath to search for requirement files')
+    parser.add_argument('-p',
+                        action='append',
+                        help='Path to search for requirement files, repeat '
+                             'flag to add more paths')
     return parser.parse_args()
 
 
@@ -33,7 +33,7 @@ def find_requirement_files(repo_path):
 
 def get_packages(file_path):
     for line in open(file_path):
-        if line:
+        if line.strip():
             yield line.strip()
 
 
@@ -48,21 +48,7 @@ def get_license(package_name):
     return out.decode('utf8').strip() or 'UNKNOWN'
 
 
-def run():
-    args = parse_args()
-
-    packages = set()
-
-    for requirement_file in find_requirement_files(args.base_path):
-        print('Processing file: {}'.format(requirement_file))
-        packages.update(get_packages(requirement_file))
-
-    packages = sorted(list(packages), key=lambda x: x.lower())
-
-    print('Found {} packages:'.format(len(packages)))
-    for package in packages:
-        print('    {}'.format(package))
-
+def get_all_licenses(packages):
     print('Fetching license info from PyPi...')
 
     pool = Pool(10)
@@ -73,6 +59,24 @@ def run():
     for package, license in output:
         print('{:<40s} {}'.format(package, license))
 
+
+def run():
+    args = parse_args()
+
+    packages = set()
+
+    for base_path in args.p:
+        for requirement_file in find_requirement_files(base_path):
+            print('Processing file: {}'.format(requirement_file))
+            packages.update(get_packages(requirement_file))
+
+    packages = sorted(list(packages), key=lambda x: x.lower())
+
+    print('Found {} packages:'.format(len(packages)))
+    for package in packages:
+        print('    {}'.format(package))
+
+    get_all_licenses(packages)
 
 
 if __name__ == '__main__':
