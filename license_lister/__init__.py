@@ -19,6 +19,12 @@ def parse_args():
                         action='append',
                         help='Path to search for requirement files, repeat '
                              'flag to add more paths')
+    parser.add_argument('--resolve-versions',
+                        action='store_true',
+                        default=False,
+                        help='If more than one version of a package is used, '
+                             'show the license info for each version '
+                             'individually')
     return parser.parse_args()
 
 
@@ -31,10 +37,14 @@ def find_requirement_files(repo_path):
                 yield path_to_file
 
 
-def get_packages(file_path):
+def get_packages(file_path, resolve_versions):
     for line in open(file_path):
-        if line.strip():
-            yield line.strip()
+        if resolve_versions:
+            package_name = line.strip()
+        else:
+            package_name = line.strip().split('==')[0]
+        if package_name:
+            yield package_name
 
 
 def get_license(package_name):
@@ -68,7 +78,8 @@ def run():
     for base_path in args.p:
         for requirement_file in find_requirement_files(base_path):
             print('Processing file: {}'.format(requirement_file))
-            packages.update(get_packages(requirement_file))
+            packages.update(get_packages(requirement_file,
+                                         args.resolve_versions))
 
     packages = sorted(list(packages), key=lambda x: x.lower())
 
@@ -77,7 +88,3 @@ def run():
         print('    {}'.format(package))
 
     get_all_licenses(packages)
-
-
-if __name__ == '__main__':
-    run()
