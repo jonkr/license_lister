@@ -7,7 +7,7 @@ setup(
         'yolk3k>=0.9',
         'gevent>=1.2.2'
     ],
-    version='0.1.0',
+    version='0.1.1',
     platforms='any',
     description='List licenses for external packages in use by your Python code',
     author='Jon Kronander',

@@ -1,16 +1,19 @@
 #!/usr/bin/env python
+
 import gevent.monkey as monkey
 monkey.patch_all()
 
 import argparse
+import json
 import os
 import re
 import subprocess
+import sys
 
 from gevent.pool import Pool
 
 
-REQUIREMENT_FILE_NAME_PATTERN = r'requirements.*\.txt'
+REQUIREMENT_FILE_NAME_PATTERN = r'requirement.*\.txt'
 
 
 def parse_args():
@@ -18,13 +21,29 @@ def parse_args():
     parser.add_argument('-p',
                         action='append',
                         help='Path to search for requirement files, repeat '
-                             'flag to add more paths')
+                             'flag to add more paths',
+                        default=[])
     parser.add_argument('--resolve-versions',
                         action='store_true',
                         default=False,
                         help='If more than one version of a package is used, '
                              'show the license info for each version '
                              'individually')
+    parser.add_argument('--pool-size',
+                        type=int,
+                        default=5,
+                        help='Number of concurrent connections to PyPi when '
+                             'fetching package license data')
+    parser.add_argument('--format',
+                        type=str,
+                        choices=['text', 'json'],
+                        default='text',
+                        help='Format for license list output')
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+
     return parser.parse_args()
 
 
@@ -58,16 +77,29 @@ def get_license(package_name):
     return out.decode('utf8').strip() or 'UNKNOWN'
 
 
-def get_all_licenses(packages):
+def get_all_licenses(packages, pool_size):
     print('Fetching license info from PyPi...')
 
-    pool = Pool(10)
+    pool = Pool(pool_size)
 
     licenses = pool.map(get_license, packages)
 
-    output = zip(packages, licenses)
-    for package, license in output:
-        print('{:<40s} {}'.format(package, license))
+    return packages, licenses
+
+
+def render_license_list(packages, licenses, format='text'):
+
+    if format == 'json':
+        data = []
+        for package, license in zip(packages, licenses):
+            data.append({'name': package, 'license': license})
+        print(json.dumps(data, indent=2))
+    elif format == 'text':
+        output = zip(packages, licenses)
+        for package, license in output:
+            print('{:<40s} {}'.format(package, license))
+    else:
+        raise Exception('Unknown format: {}'.format(format))
 
 
 def run():
@@ -84,7 +116,7 @@ def run():
     packages = sorted(list(packages), key=lambda x: x.lower())
 
     print('Found {} packages:'.format(len(packages)))
-    for package in packages:
-        print('    {}'.format(package))
 
-    get_all_licenses(packages)
+    packages, licenses = get_all_licenses(packages, pool_size=args.pool_size)
+
+    render_license_list(packages, licenses, args.format)
